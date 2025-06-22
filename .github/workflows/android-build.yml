@@ -31,39 +31,36 @@ jobs:
       - name: Build Android App Bundle (AAB)
         run: npx ionic cordova build android --prod --release -- --bundle
 
-      - name: Sign AAB
-        id: sign_aab
-        run: |
-          echo "Signing AAB..."
-          AAB_PATH=$(find platforms/android/app/build/outputs/bundle/release -name "*.aab" | head -n 1)
-          if [ -z "$AAB_PATH" ]; then
-            echo "AAB file not found!"
-            exit 1
-          fi
-          echo "AAB_PATH=$AAB_PATH" >> $GITHUB_ENV
-          KEYSTORE_PATH=${{ runner.temp }}/keystore.jks
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > $KEYSTORE_PATH
-          jarsigner -verbose -sigalg SHA1withRSA -digestalg SHA1 \
-            -keystore $KEYSTORE_PATH \
-            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-            -keypass "${{ secrets.KEY_PASSWORD }}" \
-            $AAB_PATH "${{ secrets.KEY_ALIAS }}"
-
       - name: Download bundletool
         run: |
           BUNDLETOOL_VERSION="1.15.6"
           wget https://github.com/google/bundletool/releases/download/${BUNDLETOOL_VERSION}/bundletool-all-${BUNDLETOOL_VERSION}.jar -O bundletool.jar
 
-      - name: Convert AAB to APK
+      - name: Convert AAB to Signed APK
         run: |
+          echo "Finding AAB..."
+          AAB_PATH=$(find platforms/android/app/build/outputs/bundle/release -name "*.aab" | head -n 1)
+          if [ -z "$AAB_PATH" ]; then
+            echo "AAB file not found!"
+            exit 1
+          fi
+          echo "AAB found at: $AAB_PATH"
+
+          echo "Creating keystore..."
+          KEYSTORE_PATH=${{ runner.temp }}/keystore.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > $KEYSTORE_PATH
+
+          echo "Converting AAB to APK and signing..."
           java -jar bundletool.jar build-apks \
-            --bundle=${{ env.AAB_PATH }} \
+            --bundle=$AAB_PATH \
             --output=moodleapp.apks \
             --mode=universal \
             --ks=$KEYSTORE_PATH \
-            --ks-pass=pass:${{ secrets.KEYSTORE_PASSWORD }} \
-            --ks-key-alias=${{ secrets.KEY_ALIAS }} \
-            --key-pass=pass:${{ secrets.KEY_PASSWORD }}
+            --ks-pass=pass:'${{ secrets.KEYSTORE_PASSWORD }}' \
+            --ks-key-alias='${{ secrets.KEY_ALIAS }}' \
+            --key-pass=pass:'${{ secrets.KEY_PASSWORD }}'
+
+          echo "Extracting universal APK..."
           unzip -p moodleapp.apks universal.apk > moodleapp-universal.apk
 
       - name: Upload APK artifact
