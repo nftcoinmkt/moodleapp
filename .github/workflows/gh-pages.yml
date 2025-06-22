@@ -29,7 +29,7 @@ jobs:
 
       - name: Build web application
         # The base-href should match your repository name
-        run: npx ionic build --prod --base-href /
+        run: npx ionic build --prod
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
